@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Video - BSVS</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+        }
+
+        .upload-card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #4a90d9;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .file-drop {
+            border: 2px dashed #ddd;
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-drop:hover,
+        .file-drop.dragover {
+            border-color: #4a90d9;
+            background: #f8fbff;
+        }
+
+        .file-drop input {
+            display: none;
+        }
+
+        .file-drop-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .file-drop-text {
+            color: #666;
+        }
+
+        .file-drop-text strong {
+            color: #4a90d9;
+        }
+
+        .selected-file {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #f8f8f8;
+            border-radius: 8px;
+            margin-top: 16px;
+        }
+
+        .selected-file-icon {
+            font-size: 24px;
+        }
+
+        .selected-file-name {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .selected-file-size {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .submit-btn:hover {
+            background: #3a7bc8;
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .progress {
+            display: none;
+            margin-top: 24px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #4a90d9;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 8px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .result {
+            display: none;
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 8px;
+        }
+
+        .result.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .result.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .embed-code {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Video</h1>
+        <p class="subtitle">Upload a video to be transcoded and embedded in BookStack</p>
+
+        <div class="upload-card">
+            <form id="upload-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="title">Title (optional)</label>
+                    <input type="text" id="title" name="title" placeholder="Video title">
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description (optional)</label>
+                    <textarea id="description" name="description" placeholder="Video description"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Video File</label>
+                    <div class="file-drop" id="file-drop">
+                        <input type="file" id="file" name="file" accept="video/*" required>
+                        <div class="file-drop-icon">🎬</div>
+                        <p class="file-drop-text">
+                            <strong>Click to browse</strong> or drag and drop<br>
+                            <small>MP4, MOV, AVI, MKV up to 2GB</small>
+                        </p>
+                    </div>
+                    <div class="selected-file" id="selected-file" style="display: none;">
+                        <span class="selected-file-icon">📹</span>
+                        <span class="selected-file-name" id="file-name"></span>
+                        <span class="selected-file-size" id="file-size"></span>
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submit-btn" disabled>
+                    Upload Video
+                </button>
+            </form>
+
+            <div class="progress" id="progress">
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Uploading...</p>
+            </div>
+
+            <div class="result" id="result">
+                <p id="result-message"></p>
+                <div class="embed-code" id="embed-code"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file');
+        const fileDrop = document.getElementById('file-drop');
+        const selectedFile = document.getElementById('selected-file');
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const submitBtn = document.getElementById('submit-btn');
+        const progress = document.getElementById('progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const result = document.getElementById('result');
+        const resultMessage = document.getElementById('result-message');
+        const embedCode = document.getElementById('embed-code');
+
+        // File selection
+        fileDrop.addEventListener('click', () => fileInput.click());
+
+        fileDrop.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileDrop.classList.add('dragover');
+        });
+
+        fileDrop.addEventListener('dragleave', () => {
+            fileDrop.classList.remove('dragover');
+        });
+
+        fileDrop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileDrop.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                updateFileDisplay();
+            }
+        });
+
+        fileInput.addEventListener('change', updateFileDisplay);
+
+        function updateFileDisplay() {
+            if (fileInput.files.length) {
+                const file = fileInput.files[0];
+                fileName.textContent = file.name;
+                fileSize.textContent = formatSize(file.size);
+                selectedFile.style.display = 'flex';
+                submitBtn.disabled = false;
+            }
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        // Form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+            submitBtn.disabled = true;
+            progress.style.display = 'block';
+            result.style.display = 'none';
+
+            try {
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const pct = Math.round((e.loaded / e.total) * 100);
+                        progressFill.style.width = pct + '%';
+                        progressText.textContent = `Uploading... ${pct}%`;
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 201) {
+                        const data = JSON.parse(xhr.responseText);
+                        result.className = 'result success';
+                        result.style.display = 'block';
+                        resultMessage.textContent = 'Video uploaded successfully! It will be transcoded shortly.';
+                        embedCode.innerHTML = `<strong>Embed URL:</strong><br>${window.location.origin}${data.embed_url}`;
+                        progressText.textContent = 'Complete!';
+                    } else {
+                        throw new Error(xhr.responseText);
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    throw new Error('Upload failed');
+                });
+
+                xhr.open('POST', '/api/videos');
+                xhr.send(formData);
+
+            } catch (err) {
+                result.className = 'result error';
+                result.style.display = 'block';
+                resultMessage.textContent = 'Upload failed: ' + err.message;
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

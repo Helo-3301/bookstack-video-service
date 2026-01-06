@@ -1,0 +1,102 @@
+# BSVS Production Stack with PostgreSQL
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up -d
+#
+# Configuration:
+#   Copy .env.example to .env and configure before running
+
+services:
+  bsvs-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.production
+    container_name: bsvs-api
+    ports:
+      - "${BSVS_PORT:-8080}:8080"
+    environment:
+      - BSVS_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-bsvs}:${POSTGRES_PASSWORD:-bsvs}@bsvs-db:5432/${POSTGRES_DB:-bsvs}
+      - BSVS_STORAGE_PATH=/data/videos
+      - BSVS_REDIS_URL=redis://bsvs-redis:6379/0
+      - BSVS_SECRET_KEY=${BSVS_SECRET_KEY:?Set BSVS_SECRET_KEY in .env}
+      - BSVS_TRANSCODE_PRESETS=${BSVS_TRANSCODE_PRESETS:-1080p,720p,480p}
+      - BSVS_MAX_UPLOAD_SIZE_MB=${BSVS_MAX_UPLOAD_SIZE_MB:-2048}
+      # BookStack integration (optional)
+      - BSVS_BOOKSTACK_URL=${BSVS_BOOKSTACK_URL:-}
+      - BSVS_BOOKSTACK_TOKEN_ID=${BSVS_BOOKSTACK_TOKEN_ID:-}
+      - BSVS_BOOKSTACK_TOKEN_SECRET=${BSVS_BOOKSTACK_TOKEN_SECRET:-}
+      # S3 storage (optional)
+      - BSVS_STORAGE_TYPE=${BSVS_STORAGE_TYPE:-local}
+      - BSVS_S3_ENDPOINT=${BSVS_S3_ENDPOINT:-}
+      - BSVS_S3_BUCKET=${BSVS_S3_BUCKET:-}
+      - BSVS_S3_ACCESS_KEY=${BSVS_S3_ACCESS_KEY:-}
+      - BSVS_S3_SECRET_KEY=${BSVS_S3_SECRET_KEY:-}
+    volumes:
+      - bsvs-videos:/data/videos
+    depends_on:
+      bsvs-db:
+        condition: service_healthy
+      bsvs-redis:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  bsvs-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.production
+    container_name: bsvs-worker
+    command: celery -A bsvs.worker.celery_app worker --loglevel=info -Q default,transcode --concurrency=${BSVS_TRANSCODE_WORKERS:-2}
+    environment:
+      - BSVS_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-bsvs}:${POSTGRES_PASSWORD:-bsvs}@bsvs-db:5432/${POSTGRES_DB:-bsvs}
+      - BSVS_STORAGE_PATH=/data/videos
+      - BSVS_REDIS_URL=redis://bsvs-redis:6379/0
+      - BSVS_TRANSCODE_PRESETS=${BSVS_TRANSCODE_PRESETS:-1080p,720p,480p}
+      - BSVS_STORAGE_TYPE=${BSVS_STORAGE_TYPE:-local}
+      - BSVS_S3_ENDPOINT=${BSVS_S3_ENDPOINT:-}
+      - BSVS_S3_BUCKET=${BSVS_S3_BUCKET:-}
+      - BSVS_S3_ACCESS_KEY=${BSVS_S3_ACCESS_KEY:-}
+      - BSVS_S3_SECRET_KEY=${BSVS_S3_SECRET_KEY:-}
+    volumes:
+      - bsvs-videos:/data/videos
+    depends_on:
+      bsvs-db:
+        condition: service_healthy
+      bsvs-redis:
+        condition: service_started
+    restart: unless-stopped
+
+  bsvs-db:
+    image: postgres:16-alpine
+    container_name: bsvs-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-bsvs}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-bsvs}
+      - POSTGRES_DB=${POSTGRES_DB:-bsvs}
+    volumes:
+      - bsvs-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bsvs} -d ${POSTGRES_DB:-bsvs}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  bsvs-redis:
+    image: redis:7-alpine
+    container_name: bsvs-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - bsvs-redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  bsvs-videos:
+  bsvs-db-data:
+  bsvs-redis-data:

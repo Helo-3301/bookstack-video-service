@@ -1,0 +1,101 @@
+version: '3.8'
+
+# Development environment: Local BookStack + BSVS stack
+# Run with: docker compose up -d
+
+services:
+  # ===================
+  # BookStack (for testing integration)
+  # ===================
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:latest
+    container_name: bookstack-dev
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - APP_URL=http://localhost:6875
+      - APP_KEY=base64:REMOVED_FROM_HISTORY
+      - DB_HOST=bookstack-db
+      - DB_PORT=3306
+      - DB_USERNAME=bookstack
+      - DB_PASSWORD=bookstack_dev_password
+      - DB_DATABASE=bookstackapp
+      - ALLOWED_IFRAME_HOSTS=http://localhost:8080
+      - ALLOWED_IFRAME_SOURCES=http://localhost:8080
+    volumes:
+      - bookstack-config:/config
+    ports:
+      - "6875:80"
+    depends_on:
+      - bookstack-db
+    restart: unless-stopped
+
+  bookstack-db:
+    image: mariadb:10.11
+    container_name: bookstack-db-dev
+    environment:
+      - MYSQL_ROOT_PASSWORD=bookstack_root_password
+      - MYSQL_DATABASE=bookstackapp
+      - MYSQL_USER=bookstack
+      - MYSQL_PASSWORD=bookstack_dev_password
+    volumes:
+      - bookstack-db-data:/var/lib/mysql
+    restart: unless-stopped
+
+  # ===================
+  # BSVS Stack
+  # ===================
+  bsvs-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: bsvs-api-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - BSVS_DATABASE_URL=sqlite+aiosqlite:////data/bsvs.db
+      - BSVS_STORAGE_PATH=/data/videos
+      - BSVS_REDIS_URL=redis://bsvs-redis:6379/0
+      - BSVS_SECRET_KEY=dev-secret-key-change-in-production
+      - BSVS_BOOKSTACK_URL=http://bookstack:80
+      - BSVS_TRANSCODE_PRESETS=1080p,720p,480p
+      - BSVS_DEBUG=true
+    volumes:
+      - bsvs-data:/data
+      - ../bsvs:/app/bsvs:ro  # Mount source for hot reload
+      - ../web:/app/web:ro
+    depends_on:
+      - bsvs-redis
+    restart: unless-stopped
+
+  bsvs-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: bsvs-worker-dev
+    command: celery -A bsvs.worker.celery_app worker --loglevel=info -Q default,transcode
+    environment:
+      - BSVS_DATABASE_URL=sqlite:////data/bsvs.db
+      - BSVS_STORAGE_PATH=/data/videos
+      - BSVS_REDIS_URL=redis://bsvs-redis:6379/0
+      - BSVS_TRANSCODE_PRESETS=1080p,720p,480p
+    volumes:
+      - bsvs-data:/data
+      - ../bsvs:/app/bsvs:ro
+    depends_on:
+      - bsvs-redis
+    restart: unless-stopped
+
+  bsvs-redis:
+    image: redis:7-alpine
+    container_name: bsvs-redis-dev
+    volumes:
+      - bsvs-redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  bookstack-config:
+  bookstack-db-data:
+  bsvs-data:
+  bsvs-redis-data:

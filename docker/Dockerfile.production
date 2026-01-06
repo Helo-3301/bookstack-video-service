@@ -1,0 +1,38 @@
+# BSVS - BookStack Video Service (Production)
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy application code and build files
+COPY pyproject.toml README.md ./
+COPY bsvs/ /app/bsvs/
+COPY web/ /app/web/
+
+# Install Python dependencies with production extras (PostgreSQL + S3)
+RUN pip install --no-cache-dir ".[production]"
+
+# Create data directory
+RUN mkdir -p /data/videos
+
+# Create non-root user for security
+RUN useradd -r -s /bin/false bsvs && chown -R bsvs:bsvs /app /data
+USER bsvs
+
+# Set environment
+ENV PYTHONUNBUFFERED=1
+ENV BSVS_STORAGE_PATH=/data/videos
+
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8080/health')" || exit 1
+
+# Run the application
+CMD ["python", "-m", "bsvs.main"]
