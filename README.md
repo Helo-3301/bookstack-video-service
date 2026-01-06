@@ -1,23 +1,150 @@
 # BookStack Video Service (BSVS)
 
-Self-hosted video hosting service with BookStack integration.
+Self-hosted video hosting service designed to integrate with BookStack.
 
 ## Features
 
-- Video upload and HLS transcoding
-- Multi-quality streaming (480p, 720p, 1080p)
+- Video upload with drag-and-drop UI
+- Automatic HLS transcoding (480p, 720p, 1080p)
+- Adaptive bitrate streaming
 - Thumbnail generation
-- Celery-based async processing
-- BookStack permission integration
+- BookStack editor integration (insert videos directly)
+- Header menu for quick access to video management
+- Rate limiting and metrics endpoints
+- S3-compatible storage support
 
-## Quick Start
+## Installation
+
+### Quick Install (Recommended)
+
+Run the installer script to set up BSVS alongside your existing BookStack:
 
 ```bash
-cd dev-env
+git clone https://github.com/Helo-3301/bookstack-video-service.git
+cd bookstack-video-service
+./install.sh
+```
+
+The installer will:
+1. Prompt for your BookStack URL and BSVS settings
+2. Create Docker Compose configuration
+3. Start the BSVS services
+4. Output the BookStack configuration needed
+
+### Manual Installation
+
+1. **Deploy BSVS Stack**
+
+```bash
+cd production
 docker compose up -d
 ```
 
-Then access:
-- BSVS API: http://localhost:8080
-- BookStack: http://localhost:6875
+2. **Configure BookStack Environment**
 
+Add to your BookStack `.env` file:
+
+```bash
+ALLOWED_IFRAME_HOSTS="http://your-bsvs-host:8080"
+ALLOWED_IFRAME_SOURCES="http://your-bsvs-host:8080"
+```
+
+3. **Clear BookStack Cache**
+
+```bash
+# Docker
+docker exec bookstack php /app/www/artisan config:clear
+docker exec bookstack php /app/www/artisan cache:clear
+
+# Native install
+cd /path/to/bookstack && php artisan config:clear && php artisan cache:clear
+```
+
+4. **Add Plugin to BookStack**
+
+Go to BookStack Admin → Settings → Customization → Custom HTML Head Content:
+
+```html
+<!-- BSVS Video Integration -->
+<script>window.BSVS_URL = 'http://your-bsvs-host:8080';</script>
+<script src="http://your-bsvs-host:8080/static/js/bookstack-plugin.js"></script>
+```
+
+## Usage
+
+### Uploading Videos
+
+1. Click "🎬 Videos" in the BookStack header
+2. Select "Upload Video"
+3. Drag and drop or browse for a video file
+4. Wait for transcoding to complete
+
+### Embedding in Pages
+
+1. Edit a BookStack page
+2. Click the 🎬 button in the editor toolbar
+3. Select from Video Library or upload new
+4. Click "Insert Video"
+
+### Direct Access
+
+- **Upload UI**: http://your-bsvs-host:8080/
+- **Admin UI**: http://your-bsvs-host:8080/admin
+- **API**: http://your-bsvs-host:8080/api/videos
+- **Health Check**: http://your-bsvs-host:8080/health
+
+## Development
+
+```bash
+# Start development environment with local BookStack
+cd dev-env
+docker compose up -d
+
+# Access points:
+# - BSVS: http://localhost:8080
+# - BookStack: http://localhost:6875 (admin@admin.com / password)
+```
+
+## Configuration
+
+Environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BSVS_PORT` | 8080 | API port |
+| `BSVS_DATABASE_URL` | sqlite:///data/bsvs.db | Database connection |
+| `BSVS_STORAGE_PATH` | /data/videos | Video storage path |
+| `BSVS_REDIS_URL` | redis://localhost:6379/0 | Redis for Celery |
+| `BSVS_TRANSCODE_PRESETS` | 1080p,720p,480p | Quality variants |
+| `BSVS_MAX_UPLOAD_SIZE_MB` | 2048 | Max upload size |
+| `BSVS_BOOKSTACK_URL` | - | BookStack base URL |
+| `BSVS_SECRET_KEY` | - | Secret key for signing |
+
+## Architecture
+
+```
+┌─────────────────┐     ┌──────────────────────────────────────────┐
+│   BookStack     │     │           BSVS Stack                     │
+│                 │     │  ┌─────────────────────────────────────┐ │
+│  ┌───────────┐  │     │  │         BSVS API (FastAPI)          │ │
+│  │   Page    │◄─┼─────┼──┤  - Upload, embed, stream endpoints  │ │
+│  │  Editor   │  │     │  └──────────────┬──────────────────────┘ │
+│  └───────────┘  │     │                 │                        │
+│       +         │     │                 ▼                        │
+│  🎬 Plugin JS   │     │  ┌─────────────────────────────────────┐ │
+│                 │     │  │    Celery Worker (FFmpeg)           │ │
+└─────────────────┘     │  │  - HLS transcoding                  │ │
+                        │  │  - Multi-quality variants           │ │
+                        │  └──────────────┬──────────────────────┘ │
+                        │                 │                        │
+                        │                 ▼                        │
+                        │  ┌──────────┐  ┌──────────┐              │
+                        │  │  Redis   │  │ Storage  │              │
+                        │  │ (Queue)  │  │ (Videos) │              │
+                        │  └──────────┘  └──────────┘              │
+                        └──────────────────────────────────────────┘
+```
+
+## License
+
+MIT
