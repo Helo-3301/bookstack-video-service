@@ -15,7 +15,8 @@ services:
       - PGID=1000
       - TZ=America/New_York
       - APP_URL=http://localhost:6875
-      - APP_KEY=base64:REMOVED_FROM_HISTORY
+      # Generate with: docker compose exec bookstack php artisan key:generate --show
+      - APP_KEY=${BOOKSTACK_APP_KEY:-base64:CHANGE_ME_GENERATE_NEW_KEY}
       - DB_HOST=bookstack-db
       - DB_PORT=3306
       - DB_USERNAME=bookstack
