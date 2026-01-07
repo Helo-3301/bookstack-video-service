@@ -424,6 +424,7 @@
                 <div>Processing</div>
             </div>
             <button class="refresh-btn" onclick="loadVideos()" title="Refresh">&#x21bb;</button>
+            <button class="refresh-btn" onclick="logout()" title="Logout" style="margin-left: 8px;">🚪</button>
         </div>
     </header>
 
@@ -547,7 +548,130 @@
         </div>
     </div>
 
+    <!-- Login Screen -->
+    <div class="modal-overlay active" id="login-screen" style="background: #f5f5f5;">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>🎬 BSVS Admin Login</h2>
+            </div>
+            <div class="modal-body">
+                <p style="color: #666; margin-bottom: 16px;">
+                    Enter your BookStack API token to manage videos.
+                    You need the <strong>Admin</strong> or <strong>Video Editor</strong> role.
+                </p>
+                <div class="form-group">
+                    <label>BookStack API Token</label>
+                    <input type="text" id="login-token" placeholder="token_id:token_secret" style="font-family: monospace;">
+                </div>
+                <div id="login-error" style="color: #d32f2f; margin-bottom: 12px;"></div>
+                <button class="btn btn-primary" onclick="doLogin()" style="width: 100%;">Login</button>
+                <p style="color: #999; font-size: 0.85rem; margin-top: 12px; text-align: center;">
+                    Create an API token in your BookStack profile settings.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Auth
+        const STORAGE_KEY = 'bsvs_admin_token';
+        let currentUser = null;
+
+        function getStoredToken() {
+            return localStorage.getItem(STORAGE_KEY);
+        }
+
+        function storeToken(token) {
+            localStorage.setItem(STORAGE_KEY, token);
+        }
+
+        function clearToken() {
+            localStorage.removeItem(STORAGE_KEY);
+        }
+
+        function getAuthHeaders() {
+            const token = getStoredToken();
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        async function checkAuth() {
+            const token = getStoredToken();
+            if (!token) {
+                showLoginScreen();
+                return false;
+            }
+
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.can_manage_videos) {
+                        currentUser = data;
+                        hideLoginScreen();
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.error('Auth check failed:', e);
+            }
+
+            clearToken();
+            showLoginScreen();
+            return false;
+        }
+
+        function showLoginScreen() {
+            document.getElementById('login-screen').classList.add('active');
+        }
+
+        function hideLoginScreen() {
+            document.getElementById('login-screen').classList.remove('active');
+        }
+
+        async function doLogin() {
+            const token = document.getElementById('login-token').value.trim();
+            const errorEl = document.getElementById('login-error');
+
+            if (!token) {
+                errorEl.textContent = 'Please enter a token';
+                return;
+            }
+
+            errorEl.textContent = 'Verifying...';
+
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.can_manage_videos) {
+                        storeToken(token);
+                        currentUser = data;
+                        errorEl.textContent = '';
+                        hideLoginScreen();
+                        loadVideos();
+                    } else {
+                        errorEl.textContent = 'Access denied. You need Admin or Video Editor role.';
+                    }
+                } else {
+                    errorEl.textContent = 'Invalid token';
+                }
+            } catch (e) {
+                errorEl.textContent = 'Connection error';
+            }
+        }
+
+        function logout() {
+            clearToken();
+            currentUser = null;
+            showLoginScreen();
+        }
+
+        // Video management
         let allVideos = [];
         let currentVideoId = null;
         let deleteVideoId = null;
@@ -743,6 +867,7 @@
             try {
                 const response = await fetch(`/api/videos/${currentVideoId}/subtitles`, {
                     method: 'POST',
+                    headers: getAuthHeaders(),
                     body: formData
                 });
 
@@ -763,7 +888,8 @@
 
             try {
                 const response = await fetch(`/api/videos/${currentVideoId}/subtitles/${subtitleId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
                 });
 
                 if (response.ok) {
@@ -807,7 +933,8 @@
 
             try {
                 const response = await fetch(`/api/videos/${deleteVideoId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
                 });
 
                 if (response.ok) {
@@ -861,7 +988,7 @@
             try {
                 const response = await fetch(`/api/videos/${currentVideoId}`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                     body: JSON.stringify({ visibility })
                 });
 
@@ -887,7 +1014,7 @@
             try {
                 const response = await fetch(`/api/videos/${currentVideoId}`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                     body: JSON.stringify({ bookstack_page_id: pageId ? parseInt(pageId) : null })
                 });
 
@@ -907,8 +1034,12 @@
             }
         }, 30000);
 
-        // Initial load
-        loadVideos();
+        // Initial load - check auth first
+        (async function() {
+            if (await checkAuth()) {
+                loadVideos();
+            }
+        })();
     </script>
 </body>
 </html>

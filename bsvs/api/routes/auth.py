@@ -7,16 +7,103 @@ import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bsvs.config import get_settings
 from bsvs.db import get_db, Video
-from bsvs.bookstack import get_bookstack_client
+from bsvs.bookstack import get_bookstack_client, BookStackUser
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Security scheme for OpenAPI docs
+security = HTTPBearer(auto_error=False)
+
+
+async def require_video_manager(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
+    x_bookstack_token: Annotated[str | None, Header()] = None,
+) -> BookStackUser:
+    """
+    Dependency that requires a valid BookStack token with video management permissions.
+
+    Accepts token via:
+    - Authorization: Bearer <token_id:token_secret>
+    - X-BookStack-Token: <token_id:token_secret>
+
+    Raises:
+        HTTPException 401: No token provided
+        HTTPException 403: Token valid but user lacks Video Editor role
+    """
+    # Get token from header
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif x_bookstack_token:
+        token = x_bookstack_token
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="BookStack API token required. Use Authorization: Bearer <token_id:token_secret>",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Validate against BookStack
+    client = get_bookstack_client()
+    if not client.base_url:
+        raise HTTPException(
+            status_code=503,
+            detail="BookStack integration not configured",
+        )
+
+    user = await client.validate_user_token(token)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid BookStack API token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Check permissions
+    if not user.can_manage_videos():
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Requires Admin or Video Editor role in BookStack.",
+        )
+
+    logger.info(f"Authenticated video manager: {user.name} ({user.email})")
+    return user
+
+
+async def optional_video_manager(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
+    x_bookstack_token: Annotated[str | None, Header()] = None,
+) -> BookStackUser | None:
+    """
+    Optional authentication - returns user if valid token provided, None otherwise.
+    Does not raise exceptions for missing/invalid tokens.
+    """
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif x_bookstack_token:
+        token = x_bookstack_token
+
+    if not token:
+        return None
+
+    client = get_bookstack_client()
+    if not client.base_url:
+        return None
+
+    user = await client.validate_user_token(token)
+    if user and user.can_manage_videos():
+        return user
+    return None
 
 
 class ViewerTokenRequest(BaseModel):
@@ -233,6 +320,37 @@ async def get_viewer_token(
             status_code=403,
             detail="Unknown visibility setting"
         )
+
+
+class UserPermissionsResponse(BaseModel):
+    """Response with user permissions."""
+    authenticated: bool
+    can_manage_videos: bool
+    user_name: str | None = None
+    user_email: str | None = None
+
+
+@router.get("/me", response_model=UserPermissionsResponse)
+async def get_current_user_permissions(
+    user: BookStackUser | None = Depends(optional_video_manager),
+):
+    """
+    Check current user's permissions for video management.
+
+    Returns authentication status and whether user has Admin or Video Editor role.
+    Used by the BookStack plugin to determine whether to show video management UI.
+    """
+    if user:
+        return UserPermissionsResponse(
+            authenticated=True,
+            can_manage_videos=True,
+            user_name=user.name,
+            user_email=user.email,
+        )
+    return UserPermissionsResponse(
+        authenticated=False,
+        can_manage_videos=False,
+    )
 
 
 @router.get("/check-permission/{video_id}")

@@ -204,9 +204,57 @@
             font-size: 0.85rem;
             word-break: break-all;
         }
+
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .login-card h2 {
+            margin-bottom: 16px;
+        }
+
+        .login-error {
+            color: #c62828;
+            margin-bottom: 12px;
+        }
     </style>
 </head>
 <body>
+    <!-- Login Screen -->
+    <div class="login-overlay" id="login-screen">
+        <div class="login-card">
+            <h2>🎬 BSVS Upload</h2>
+            <p style="color: #666; margin-bottom: 16px;">
+                Enter your BookStack API token to upload videos.
+                You need the <strong>Admin</strong> or <strong>Video Editor</strong> role.
+            </p>
+            <div class="form-group">
+                <label>BookStack API Token</label>
+                <input type="text" id="login-token" placeholder="token_id:token_secret" style="font-family: monospace;">
+            </div>
+            <div class="login-error" id="login-error"></div>
+            <button class="submit-btn" onclick="doLogin()">Login</button>
+        </div>
+    </div>
+
     <div class="container">
         <h1>Upload Video</h1>
         <p class="subtitle">Upload a video to be transcoded and embedded in BookStack</p>
@@ -260,6 +308,81 @@
     </div>
 
     <script>
+        // Auth
+        const STORAGE_KEY = 'bsvs_admin_token';
+
+        function getStoredToken() {
+            return localStorage.getItem(STORAGE_KEY);
+        }
+
+        function storeToken(token) {
+            localStorage.setItem(STORAGE_KEY, token);
+        }
+
+        async function checkAuth() {
+            const token = getStoredToken();
+            if (!token) {
+                document.getElementById('login-screen').style.display = 'flex';
+                return false;
+            }
+
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.can_manage_videos) {
+                        document.getElementById('login-screen').style.display = 'none';
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.error('Auth check failed:', e);
+            }
+
+            localStorage.removeItem(STORAGE_KEY);
+            document.getElementById('login-screen').style.display = 'flex';
+            return false;
+        }
+
+        async function doLogin() {
+            const token = document.getElementById('login-token').value.trim();
+            const errorEl = document.getElementById('login-error');
+
+            if (!token) {
+                errorEl.textContent = 'Please enter a token';
+                return;
+            }
+
+            errorEl.textContent = 'Verifying...';
+
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.can_manage_videos) {
+                        storeToken(token);
+                        errorEl.textContent = '';
+                        document.getElementById('login-screen').style.display = 'none';
+                    } else {
+                        errorEl.textContent = 'Access denied. You need Admin or Video Editor role.';
+                    }
+                } else {
+                    errorEl.textContent = 'Invalid token';
+                }
+            } catch (e) {
+                errorEl.textContent = 'Connection error';
+            }
+        }
+
+        // Check auth on load
+        checkAuth();
+
+        // Form elements
         const form = document.getElementById('upload-form');
         const fileInput = document.getElementById('file');
         const fileDrop = document.getElementById('file-drop');
@@ -352,6 +475,7 @@
                 });
 
                 xhr.open('POST', '/api/videos');
+                xhr.setRequestHeader('Authorization', 'Bearer ' + getStoredToken());
                 xhr.send(formData);
 
             } catch (err) {

@@ -21,8 +21,12 @@ services:
       - DB_USERNAME=bookstack
       - DB_PASSWORD=bookstack_dev_password
       - DB_DATABASE=bookstackapp
-      - ALLOWED_IFRAME_HOSTS=http://localhost:8080
-      - ALLOWED_IFRAME_SOURCES=http://localhost:8080
+      # ALLOWED_IFRAME_HOSTS forces samesite=none which requires HTTPS
+      # Temporarily disabled for HTTP dev login. Re-enable for iframe testing.
+      # - ALLOWED_IFRAME_HOSTS=http://localhost:8080
+      # - ALLOWED_IFRAME_SOURCES=http://localhost:8080
+      - SESSION_SECURE_COOKIE=false
+      - SESSION_SAME_SITE=lax
     volumes:
       - bookstack-config:/config
     ports:

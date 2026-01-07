@@ -14,6 +14,8 @@ from bsvs.config import get_settings
 from bsvs.db import get_db, Video, VideoStatus, TranscodeJob, JobStatus, Subtitle
 from bsvs.worker.tasks import transcode_video_task
 from bsvs.api.ratelimit import limiter, RATE_LIMIT_UPLOAD
+from bsvs.api.routes.auth import require_video_manager
+from bsvs.bookstack import BookStackUser
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -58,13 +60,18 @@ async def upload_video(
     title: Annotated[str, Form()] = "",
     description: Annotated[str | None, Form()] = None,
     db: AsyncSession = Depends(get_db),
+    user: BookStackUser = Depends(require_video_manager),
 ):
     """
     Upload a new video file.
 
+    Requires authentication with a BookStack API token for a user with
+    Admin or Video Editor role.
+
     The video will be saved and queued for transcoding to HLS format.
     Rate limited to 10 uploads per minute per IP.
     """
+    logger.info(f"Video upload by {user.name} ({user.email})")
     settings = get_settings()
 
     # Validate file
@@ -196,9 +203,13 @@ async def update_video(
     video_id: str,
     update: VideoUpdateRequest,
     db: AsyncSession = Depends(get_db),
+    user: BookStackUser = Depends(require_video_manager),
 ):
     """
     Update video metadata.
+
+    Requires authentication with a BookStack API token for a user with
+    Admin or Video Editor role.
 
     Allows updating title, description, visibility, and BookStack page link.
 
@@ -298,8 +309,15 @@ async def get_video_status(
 async def delete_video(
     video_id: str,
     db: AsyncSession = Depends(get_db),
+    user: BookStackUser = Depends(require_video_manager),
 ):
-    """Delete a video and all its files."""
+    """
+    Delete a video and all its files.
+
+    Requires authentication with a BookStack API token for a user with
+    Admin or Video Editor role.
+    """
+    logger.info(f"Video {video_id} deleted by {user.name}")
     settings = get_settings()
 
     result = await db.execute(select(Video).where(Video.id == video_id))
@@ -336,9 +354,13 @@ async def upload_subtitle(
     label: Annotated[str, Form()] = "English",
     is_default: Annotated[bool, Form()] = False,
     db: AsyncSession = Depends(get_db),
+    user: BookStackUser = Depends(require_video_manager),
 ):
     """
     Upload a subtitle file (VTT format) for a video.
+
+    Requires authentication with a BookStack API token for a user with
+    Admin or Video Editor role.
 
     Args:
         video_id: Video ID to attach subtitle to
@@ -442,8 +464,14 @@ async def delete_subtitle(
     video_id: str,
     subtitle_id: str,
     db: AsyncSession = Depends(get_db),
+    user: BookStackUser = Depends(require_video_manager),
 ):
-    """Delete a subtitle track."""
+    """
+    Delete a subtitle track.
+
+    Requires authentication with a BookStack API token for a user with
+    Admin or Video Editor role.
+    """
     result = await db.execute(
         select(Subtitle).where(Subtitle.id == subtitle_id, Subtitle.video_id == video_id)
     )

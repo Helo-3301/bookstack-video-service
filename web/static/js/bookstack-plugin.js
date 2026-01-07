@@ -16,10 +16,141 @@
 
     // Configuration
     const BSVS_URL = window.BSVS_URL || '';
+    const STORAGE_KEY = 'bsvs_token';
 
     if (!BSVS_URL) {
         console.warn('BSVS: No BSVS_URL configured. Set window.BSVS_URL before loading this script.');
         return;
+    }
+
+    // Token management
+    function getStoredToken() {
+        return localStorage.getItem(STORAGE_KEY);
+    }
+
+    function storeToken(token) {
+        localStorage.setItem(STORAGE_KEY, token);
+    }
+
+    function clearToken() {
+        localStorage.removeItem(STORAGE_KEY);
+    }
+
+    function getAuthHeaders() {
+        const token = getStoredToken();
+        if (token) {
+            return { 'Authorization': `Bearer ${token}` };
+        }
+        return {};
+    }
+
+    // Check if user can manage videos
+    let userCanManageVideos = false;
+    async function checkPermissions() {
+        const token = getStoredToken();
+        if (!token) {
+            userCanManageVideos = false;
+            return false;
+        }
+
+        try {
+            const response = await fetch(`${BSVS_URL}/api/auth/me`, {
+                headers: getAuthHeaders()
+            });
+            if (response.ok) {
+                const data = await response.json();
+                userCanManageVideos = data.can_manage_videos;
+                return data.can_manage_videos;
+            }
+        } catch (error) {
+            console.warn('BSVS: Permission check failed:', error);
+        }
+        userCanManageVideos = false;
+        return false;
+    }
+
+    // Token setup modal
+    function showTokenSetup() {
+        const modal = document.createElement('div');
+        modal.className = 'bsvs-modal-overlay';
+        modal.innerHTML = `
+            <div class="bsvs-modal" style="max-width: 450px;">
+                <h2>BSVS Setup</h2>
+                <p style="margin-bottom: 16px; color: #666;">
+                    Enter your BookStack API token to manage videos.
+                    You can create a token in your BookStack profile under "API Tokens".
+                </p>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 500;">API Token</label>
+                    <input type="text" id="bsvs-token-input" placeholder="token_id:token_secret"
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace;">
+                </div>
+                <div class="bsvs-status" id="bsvs-token-status" style="margin-bottom: 16px;"></div>
+                <div class="bsvs-modal-actions">
+                    <button class="bsvs-btn bsvs-btn-secondary" id="bsvs-token-cancel">Cancel</button>
+                    <button class="bsvs-btn bsvs-btn-primary" id="bsvs-token-save">Verify & Save</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const tokenInput = modal.querySelector('#bsvs-token-input');
+        const statusEl = modal.querySelector('#bsvs-token-status');
+        const saveBtn = modal.querySelector('#bsvs-token-save');
+        const cancelBtn = modal.querySelector('#bsvs-token-cancel');
+
+        // Pre-fill with existing token if any
+        const existing = getStoredToken();
+        if (existing) tokenInput.value = existing;
+
+        cancelBtn.addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+        saveBtn.addEventListener('click', async () => {
+            const token = tokenInput.value.trim();
+            if (!token) {
+                statusEl.textContent = 'Please enter a token';
+                statusEl.style.color = '#d32f2f';
+                return;
+            }
+
+            statusEl.textContent = 'Verifying...';
+            statusEl.style.color = '#666';
+            saveBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${BSVS_URL}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.can_manage_videos) {
+                        storeToken(token);
+                        userCanManageVideos = true;
+                        statusEl.textContent = `✓ Authenticated as ${data.user_name}`;
+                        statusEl.style.color = '#2e7d32';
+                        setTimeout(() => {
+                            modal.remove();
+                            updateMenuVisibility();
+                        }, 1000);
+                    } else {
+                        statusEl.textContent = '✗ Token valid but you need Admin or Video Editor role';
+                        statusEl.style.color = '#d32f2f';
+                        saveBtn.disabled = false;
+                    }
+                } else {
+                    statusEl.textContent = '✗ Invalid token';
+                    statusEl.style.color = '#d32f2f';
+                    saveBtn.disabled = false;
+                }
+            } catch (error) {
+                statusEl.textContent = '✗ Connection error';
+                statusEl.style.color = '#d32f2f';
+                saveBtn.disabled = false;
+            }
+        });
     }
 
     // Styles for the modal
@@ -252,9 +383,13 @@
 
         const response = await fetch(`${BSVS_URL}/api/videos`, {
             method: 'POST',
+            headers: getAuthHeaders(),
             body: formData,
         });
 
+        if (response.status === 401 || response.status === 403) {
+            throw new Error('Authentication required. Please set up your API token.');
+        }
         if (!response.ok) throw new Error('Upload failed');
         return response.json();
     }
@@ -589,7 +724,38 @@
     }
 
     // Add BSVS menu to BookStack header
+    let headerMenuEl = null;
+
+    function isBookStackUserLoggedIn() {
+        // Check if we're on the login page
+        if (window.location.pathname === '/login') {
+            return false;
+        }
+        // Check for login link in header (indicates user is NOT logged in)
+        const loginLink = document.querySelector('a[href*="/login"]');
+        if (loginLink && loginLink.closest('header, nav, .header-links')) {
+            return false;
+        }
+        // Check for user menu (indicates user IS logged in)
+        const userMenu = document.querySelector('.user-name, .dropdown-toggle .avatar, [data-user-profile]');
+        if (userMenu) {
+            return true;
+        }
+        // Default: assume logged in if not on login page and no login link found
+        return !document.querySelector('form[action*="login"]');
+    }
+
     function addHeaderMenu() {
+        // Only show menu if user is logged into BookStack
+        if (!isBookStackUserLoggedIn()) {
+            // Remove menu if it exists (in case page state changed)
+            const existingMenu = document.querySelector('.bsvs-header-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+            return;
+        }
+
         // Find BookStack header actions area
         const headerRight = document.querySelector('.header-links, .header-right, header .actions');
         if (headerRight && !document.querySelector('.bsvs-header-menu')) {
@@ -621,22 +787,29 @@
                         border: 1px solid #ddd;
                         border-radius: 4px;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                        min-width: 150px;
+                        min-width: 180px;
                         z-index: 1000;
                     ">
-                        <a href="${BSVS_URL}/" target="_blank" style="
+                        <a href="${BSVS_URL}/" target="_blank" class="bsvs-menu-item bsvs-requires-auth" style="
                             display: block;
                             padding: 10px 16px;
                             color: #333;
                             text-decoration: none;
                             border-bottom: 1px solid #eee;
                         ">📤 Upload Video</a>
-                        <a href="${BSVS_URL}/admin" target="_blank" style="
+                        <a href="${BSVS_URL}/admin" target="_blank" class="bsvs-menu-item bsvs-requires-auth" style="
                             display: block;
                             padding: 10px 16px;
                             color: #333;
                             text-decoration: none;
+                            border-bottom: 1px solid #eee;
                         ">⚙️ Video Admin</a>
+                        <a href="#" class="bsvs-menu-item bsvs-setup-link" style="
+                            display: block;
+                            padding: 10px 16px;
+                            color: #333;
+                            text-decoration: none;
+                        ">🔑 Setup API Token</a>
                     </div>
                 </div>
             `;
@@ -660,12 +833,43 @@
                 link.addEventListener('mouseleave', () => link.style.background = 'white');
             });
 
+            // Setup link click
+            menuContainer.querySelector('.bsvs-setup-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                dropdown.style.display = 'none';
+                showTokenSetup();
+            });
+
             headerRight.appendChild(menuContainer);
+            headerMenuEl = menuContainer;
+
+            // Update visibility based on permissions
+            updateMenuVisibility();
+        }
+    }
+
+    function updateMenuVisibility() {
+        if (!headerMenuEl) return;
+
+        const authItems = headerMenuEl.querySelectorAll('.bsvs-requires-auth');
+        const setupLink = headerMenuEl.querySelector('.bsvs-setup-link');
+
+        if (userCanManageVideos) {
+            // User has permission - show upload/admin, change setup to "Change Token"
+            authItems.forEach(item => item.style.display = 'block');
+            setupLink.textContent = '🔑 Change API Token';
+        } else {
+            // User doesn't have permission - hide upload/admin, show setup
+            authItems.forEach(item => item.style.display = 'none');
+            setupLink.textContent = '🔑 Setup API Token';
         }
     }
 
     // Initialize when DOM is ready
-    function init() {
+    async function init() {
+        // Check permissions first
+        await checkPermissions();
+
         addToolbarButton();
         addHeaderMenu();
     }
