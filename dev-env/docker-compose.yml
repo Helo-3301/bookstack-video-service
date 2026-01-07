@@ -1,7 +1,9 @@
-version: '3.8'
-
 # Development environment: Local BookStack + BSVS stack
-# Run with: docker compose up -d
+#
+# SETUP:
+#   1. Copy .env.example to .env
+#   2. Generate secrets (see .env.example for commands)
+#   3. Run: docker compose up -d
 
 services:
   # ===================
@@ -60,7 +62,7 @@ services:
       - BSVS_DATABASE_URL=sqlite+aiosqlite:////data/bsvs.db
       - BSVS_STORAGE_PATH=/data/videos
       - BSVS_REDIS_URL=redis://bsvs-redis:6379/0
-      - BSVS_SECRET_KEY=dev-secret-key-change-in-production
+      - BSVS_SECRET_KEY=${BSVS_SECRET_KEY:-dev-only-change-in-production}
       - BSVS_BOOKSTACK_URL=http://bookstack:80
       - BSVS_TRANSCODE_PRESETS=1080p,720p,480p
       - BSVS_DEBUG=true

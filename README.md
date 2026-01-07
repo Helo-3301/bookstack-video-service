@@ -95,15 +95,61 @@ Go to BookStack Admin → Settings → Customization → Custom HTML Head Conten
 
 ## Development
 
-```bash
-# Start development environment with local BookStack
-cd dev-env
-docker compose up -d
+### Initial Setup
 
-# Access points:
-# - BSVS: http://localhost:8080
-# - BookStack: http://localhost:6875 (admin@admin.com / password)
+```bash
+# Clone and enter directory
+git clone https://github.com/Helo-3301/bookstack-video-service.git
+cd bookstack-video-service
+
+# Install pre-commit hooks (recommended)
+pip install pre-commit
+pre-commit install
+
+# Set up dev environment
+cd dev-env
+cp .env.example .env
+
+# Generate secrets (edit .env with these values)
+openssl rand -base64 32  # For BSVS_SECRET_KEY
+docker compose run --rm bookstack php artisan key:generate --show  # For BOOKSTACK_APP_KEY
+
+# Start services
+docker compose up -d
 ```
+
+### Access Points
+- **BSVS**: http://localhost:8080
+- **BookStack**: http://localhost:6875 (admin@admin.com / password)
+
+### Pre-commit Hooks
+
+This repo uses pre-commit hooks to prevent secrets from being committed:
+
+```bash
+# Run manually on all files
+pre-commit run --all-files
+
+# Skip hooks (not recommended)
+git commit --no-verify
+```
+
+## Security
+
+### Secret Management
+
+- **Never commit secrets** - Use environment variables
+- **Use `.env.example`** - Copy to `.env` and fill in values
+- **Pre-commit hooks** - Gitleaks scans for secrets before commit
+- **Rotate compromised secrets** - If a secret is exposed, rotate immediately
+
+### Required Secrets
+
+| Secret | Where | How to Generate |
+|--------|-------|-----------------|
+| `BOOKSTACK_APP_KEY` | BookStack | `php artisan key:generate --show` |
+| `BSVS_SECRET_KEY` | BSVS | `openssl rand -base64 32` |
+| API Tokens | BookStack UI | User Profile → API Tokens |
 
 ## Configuration
 

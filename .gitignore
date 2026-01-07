@@ -19,6 +19,14 @@ data/
 
 # Environment files with secrets
 .env
+.env.*
+!.env.example
+*.env.local
+secrets/
+*.pem
+*.key
+*_secret*
+*_token*
 
 # IDE
 .idea/
