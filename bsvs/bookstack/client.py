@@ -34,16 +34,33 @@ class BookStackUser:
     def can_manage_videos(self) -> bool:
         """Check if user can manage videos (admin or 'Video Editor' role)."""
         if not self.roles:
+            logger.debug(f"User {self.name} has no roles")
             return False
+
+        logger.debug(f"Checking roles for {self.name}: {self.roles}")
+
         for role in self.roles:
-            # Check for admin (either by system_name or display_name)
-            system_name = role.get("system_name", "").lower()
-            display_name = role.get("display_name", "").lower()
-            if system_name == "admin" or display_name == "admin":
+            # Handle different role formats from BookStack API
+            # Could be: display_name, system_name, or just name
+            role_name = (
+                role.get("display_name") or
+                role.get("system_name") or
+                role.get("name") or
+                ""
+            ).lower()
+
+            logger.debug(f"Checking role: {role} -> role_name: {role_name}")
+
+            # Check for admin
+            if role_name == "admin":
+                logger.debug(f"User {self.name} has admin role")
                 return True
             # Check for "Video Editor" role (case-insensitive)
-            if "video editor" in display_name:
+            if "video editor" in role_name:
+                logger.debug(f"User {self.name} has video editor role")
                 return True
+
+        logger.debug(f"User {self.name} does not have required role")
         return False
 
     def is_admin(self) -> bool:
@@ -196,6 +213,8 @@ class BookStackClient:
 
                 if response.status_code == 200:
                     data = response.json()
+                    logger.debug(f"Token validation /users/me response: {data}")
+                    logger.debug(f"Roles from response: {data.get('roles')}")
                     return BookStackUser(
                         id=data["id"],
                         name=data["name"],
