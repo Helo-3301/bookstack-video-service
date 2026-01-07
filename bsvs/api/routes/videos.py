@@ -27,11 +27,21 @@ class VideoResponse(BaseModel):
     original_filename: str
     duration_seconds: int | None
     status: str
+    visibility: str
+    bookstack_page_id: int | None
     created_at: str
     embed_url: str
 
     class Config:
         from_attributes = True
+
+
+class VideoUpdateRequest(BaseModel):
+    """Request to update video metadata."""
+    title: str | None = None
+    description: str | None = None
+    visibility: str | None = None  # public, unlisted, page_protected, private
+    bookstack_page_id: int | None = None
 
 
 class VideoListResponse(BaseModel):
@@ -113,6 +123,8 @@ async def upload_video(
         original_filename=video.original_filename,
         duration_seconds=video.duration_seconds,
         status=video.status,
+        visibility=video.visibility or "public",
+        bookstack_page_id=video.bookstack_page_id,
         created_at=video.created_at.isoformat(),
         embed_url=f"/embed/{video.id}",
     )
@@ -142,6 +154,8 @@ async def list_videos(
                 original_filename=v.original_filename,
                 duration_seconds=v.duration_seconds,
                 status=v.status,
+                visibility=v.visibility or "public",
+                bookstack_page_id=v.bookstack_page_id,
                 created_at=v.created_at.isoformat(),
                 embed_url=f"/embed/{v.id}",
             )
@@ -170,6 +184,66 @@ async def get_video(
         original_filename=video.original_filename,
         duration_seconds=video.duration_seconds,
         status=video.status,
+        visibility=video.visibility or "public",
+        bookstack_page_id=video.bookstack_page_id,
+        created_at=video.created_at.isoformat(),
+        embed_url=f"/embed/{video.id}",
+    )
+
+
+@router.patch("/{video_id}", response_model=VideoResponse)
+async def update_video(
+    video_id: str,
+    update: VideoUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update video metadata.
+
+    Allows updating title, description, visibility, and BookStack page link.
+
+    Visibility options:
+    - public: Anyone can view
+    - unlisted: Only via direct link or embed
+    - page_protected: Requires viewer token (tied to BookStack page)
+    - private: Not viewable via embed
+    """
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Validate visibility value
+    valid_visibility = ["public", "unlisted", "page_protected", "private"]
+    if update.visibility and update.visibility not in valid_visibility:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid visibility. Must be one of: {', '.join(valid_visibility)}"
+        )
+
+    # Update fields
+    if update.title is not None:
+        video.title = update.title
+    if update.description is not None:
+        video.description = update.description
+    if update.visibility is not None:
+        video.visibility = update.visibility
+    if update.bookstack_page_id is not None:
+        video.bookstack_page_id = update.bookstack_page_id
+
+    await db.commit()
+    await db.refresh(video)
+
+    return VideoResponse(
+        id=video.id,
+        title=video.title,
+        description=video.description,
+        original_filename=video.original_filename,
+        duration_seconds=video.duration_seconds,
+        status=video.status,
+        visibility=video.visibility or "public",
+        bookstack_page_id=video.bookstack_page_id,
         created_at=video.created_at.isoformat(),
         embed_url=f"/embed/{video.id}",
     )

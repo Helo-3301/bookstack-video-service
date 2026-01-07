@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from bsvs.config import get_settings
 from bsvs.db import init_db
-from bsvs.api.routes import videos, embed, stream, metrics
+from bsvs.api.routes import videos, embed, stream, metrics, auth
 from bsvs.api.ratelimit import limiter
 
 # Configure logging
@@ -81,6 +81,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(videos.router, prefix="/api/videos", tags=["videos"])
+    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(embed.router, prefix="/embed", tags=["embed"])
     app.include_router(stream.router, prefix="/stream", tags=["stream"])
     app.include_router(metrics.router, prefix="/api", tags=["metrics"])

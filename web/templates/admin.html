@@ -182,6 +182,20 @@
         .status-pending { background: #e3f2fd; color: #1565c0; }
         .status-failed { background: #ffebee; color: #c62828; }
 
+        .visibility-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
+        .visibility-public { background: #e8f5e9; color: #2e7d32; }
+        .visibility-unlisted { background: #fff3e0; color: #ef6c00; }
+        .visibility-page_protected { background: #e3f2fd; color: #1565c0; }
+        .visibility-private { background: #ffebee; color: #c62828; }
+
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -435,6 +449,24 @@
                 <div class="video-preview" id="video-preview"></div>
 
                 <div class="section">
+                    <div class="section-title">Access Control</div>
+                    <div class="form-group">
+                        <label>Visibility</label>
+                        <select id="video-visibility" onchange="updateVideoVisibility()">
+                            <option value="public">Public - Anyone can view</option>
+                            <option value="unlisted">Unlisted - Only via direct link or embed</option>
+                            <option value="page_protected">Page Protected - Sync with BookStack page permissions</option>
+                            <option value="private">Private - Not viewable via embed</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="page-link-group" style="display: none;">
+                        <label>Linked BookStack Page ID (optional)</label>
+                        <input type="number" id="video-page-id" placeholder="e.g., 123" onchange="updateVideoPageId()">
+                        <small style="color: #666;">When set, video is only viewable from this specific page.</small>
+                    </div>
+                </div>
+
+                <div class="section">
                     <div class="section-title">Add to BookStack Page</div>
                     <div class="help-text">
                         <strong>Option 1:</strong> In BookStack, edit your page and click the 🎬 button in the toolbar to insert videos directly.<br><br>
@@ -580,6 +612,7 @@
                                     ${video.duration_seconds ? `<span>${formatDuration(video.duration_seconds)}</span>` : ''}
                                 </div>
                                 <span class="video-status status-${video.status}">${video.status}</span>
+                                <span class="visibility-badge visibility-${video.visibility || 'public'}">${formatVisibility(video.visibility)}</span>
                             </div>
                         </div>
                     `).join('')}
@@ -607,6 +640,13 @@
                     </div>
                 `;
             }
+
+            // Set visibility controls
+            const visibility = video.visibility || 'public';
+            document.getElementById('video-visibility').value = visibility;
+            document.getElementById('page-link-group').style.display =
+                visibility === 'page_protected' ? 'block' : 'none';
+            document.getElementById('video-page-id').value = video.bookstack_page_id || '';
 
             // Set embed code
             const embedCode = `<iframe src="${window.location.origin}/embed/${videoId}" width="100%" height="400" frameborder="0" allowfullscreen></iframe>`;
@@ -797,6 +837,67 @@
             const mins = Math.floor(seconds / 60);
             const secs = seconds % 60;
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function formatVisibility(visibility) {
+            const labels = {
+                'public': 'Public',
+                'unlisted': 'Unlisted',
+                'page_protected': 'Protected',
+                'private': 'Private'
+            };
+            return labels[visibility] || 'Public';
+        }
+
+        async function updateVideoVisibility() {
+            if (!currentVideoId) return;
+
+            const visibility = document.getElementById('video-visibility').value;
+
+            // Show/hide page ID field for page_protected
+            document.getElementById('page-link-group').style.display =
+                visibility === 'page_protected' ? 'block' : 'none';
+
+            try {
+                const response = await fetch(`/api/videos/${currentVideoId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ visibility })
+                });
+
+                if (response.ok) {
+                    // Update local data
+                    const video = allVideos.find(v => v.id === currentVideoId);
+                    if (video) video.visibility = visibility;
+                    renderVideos(allVideos);
+                } else {
+                    const error = await response.json();
+                    alert('Failed to update visibility: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function updateVideoPageId() {
+            if (!currentVideoId) return;
+
+            const pageId = document.getElementById('video-page-id').value;
+
+            try {
+                const response = await fetch(`/api/videos/${currentVideoId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bookstack_page_id: pageId ? parseInt(pageId) : null })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert('Failed to update page link: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
 
         // Auto-refresh every 30 seconds for processing videos

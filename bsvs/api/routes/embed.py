@@ -14,6 +14,7 @@ from bsvs.config import get_settings
 from bsvs.db import get_db, Video, VideoStatus, Subtitle
 from bsvs.auth import generate_stream_token
 from bsvs.bookstack import get_bookstack_client
+from bsvs.api.routes.auth import verify_viewer_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,6 +54,7 @@ async def embed_player(
     request: Request,
     video_id: str,
     page_id: int | None = Query(None, description="BookStack page ID for access validation"),
+    viewer_token: str | None = Query(None, alias="vt", description="Viewer access token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -61,19 +63,17 @@ async def embed_player(
     This endpoint returns an HTML page with a Video.js player configured
     to play the HLS stream for the video.
 
-    If page_id is provided, validates that the viewer has access to the
-    corresponding BookStack page before serving the video.
+    Access control:
+    - Public videos: Always accessible
+    - Unlisted videos: Accessible via direct link
+    - Page-protected videos: Require valid viewer token with matching page_id
+    - Private videos: Not accessible via embed
+
+    The viewer_token (vt) parameter should be obtained from /api/auth/viewer-token.
     """
     settings = get_settings()
 
-    # Validate BookStack page access if page_id provided
-    if not await validate_bookstack_access(page_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied - you don't have permission to view this video"
-        )
-
-    # Get video from database with eager-loaded variants and subtitles
+    # First, get the video to check its visibility
     result = await db.execute(
         select(Video)
         .where(Video.id == video_id)
@@ -83,6 +83,47 @@ async def embed_player(
 
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+
+    visibility = video.visibility or "public"
+
+    # Check access based on visibility
+    if visibility == "private":
+        raise HTTPException(
+            status_code=403,
+            detail="This video is private"
+        )
+
+    elif visibility == "page_protected":
+        # Require a valid viewer token for page-protected videos
+        if not viewer_token:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied - viewer token required"
+            )
+
+        is_valid, token_page_id, error = verify_viewer_token(viewer_token, video_id)
+        if not is_valid:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied - {error}"
+            )
+
+        # If video is linked to a specific page, verify it matches
+        if video.bookstack_page_id and token_page_id != video.bookstack_page_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Video not available in this context"
+            )
+
+    elif visibility == "unlisted":
+        # Unlisted videos are accessible via direct link, no extra validation
+        pass
+
+    elif visibility == "public":
+        # Public videos need no validation, but can optionally validate page access
+        if page_id and not await validate_bookstack_access(page_id):
+            logger.warning(f"Page {page_id} not accessible, but video is public")
+            # Still allow for public videos
 
     # Check if video is ready
     if video.status != VideoStatus.READY.value:

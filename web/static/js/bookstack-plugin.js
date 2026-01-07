@@ -219,6 +219,32 @@
         return response.json();
     }
 
+    async function fetchVideoInfo(videoId) {
+        const response = await fetch(`${BSVS_URL}/api/videos/${videoId}`);
+        if (!response.ok) throw new Error('Failed to fetch video info');
+        return response.json();
+    }
+
+    async function requestViewerToken(videoId, pageId) {
+        const response = await fetch(`${BSVS_URL}/api/auth/viewer-token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                video_id: videoId,
+                page_id: pageId ? parseInt(pageId) : null,
+            }),
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Failed to get viewer token' }));
+            throw new Error(error.detail || 'Failed to get viewer token');
+        }
+
+        return response.json();
+    }
+
     async function uploadVideo(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -254,9 +280,46 @@
         throw new Error('Video processing timed out');
     }
 
-    // Generate embed code
-    function generateEmbedCode(videoId, pageId) {
-        const pageParam = pageId ? `&page_id=${pageId}` : '';
+    // Generate embed code - handles viewer tokens for protected videos
+    async function generateEmbedCode(videoId, pageId) {
+        try {
+            // Fetch video info to check visibility
+            const video = await fetchVideoInfo(videoId);
+            const visibility = video.visibility || 'public';
+
+            let embedUrl = `${BSVS_URL}/embed/${videoId}?`;
+            const params = [];
+
+            // Add page_id if available
+            if (pageId) {
+                params.push(`page_id=${pageId}`);
+            }
+
+            // For page_protected videos, get a viewer token
+            if (visibility === 'page_protected') {
+                try {
+                    const tokenResponse = await requestViewerToken(videoId, pageId);
+                    params.push(`vt=${encodeURIComponent(tokenResponse.token)}`);
+                } catch (tokenError) {
+                    console.warn('BSVS: Could not get viewer token:', tokenError.message);
+                    // Still generate embed, player will show access denied
+                }
+            }
+
+            embedUrl += params.join('&');
+
+            return `<iframe src="${embedUrl}" width="100%" height="400" frameborder="0" allowfullscreen></iframe>`;
+        } catch (error) {
+            console.error('BSVS: Error generating embed code:', error);
+            // Fallback to basic embed without token
+            const pageParam = pageId ? `page_id=${pageId}` : '';
+            return `<iframe src="${BSVS_URL}/embed/${videoId}?${pageParam}" width="100%" height="400" frameborder="0" allowfullscreen></iframe>`;
+        }
+    }
+
+    // Synchronous version for simple cases
+    function generateEmbedCodeSync(videoId, pageId) {
+        const pageParam = pageId ? `page_id=${pageId}` : '';
         return `<iframe src="${BSVS_URL}/embed/${videoId}?${pageParam}" width="100%" height="400" frameborder="0" allowfullscreen></iframe>`;
     }
 
@@ -350,16 +413,31 @@
 
         // Buttons
         modalEl.querySelector('#bsvs-cancel').addEventListener('click', closeModal);
-        modalEl.querySelector('#bsvs-insert').addEventListener('click', () => {
+        modalEl.querySelector('#bsvs-insert').addEventListener('click', async () => {
             if (selectedVideoId) {
-                const pageId = getCurrentPageId();
-                const embedCode = generateEmbedCode(selectedVideoId, pageId);
-                if (insertIntoEditor(embedCode)) {
-                    closeModal();
-                } else {
-                    // Show embed code for manual copy
-                    alert('Embed code (copy and paste):\n\n' + embedCode);
-                    closeModal();
+                const insertBtn = modalEl.querySelector('#bsvs-insert');
+                const statusEl = modalEl.querySelector('#bsvs-status');
+
+                insertBtn.disabled = true;
+                insertBtn.textContent = 'Generating...';
+                if (statusEl) statusEl.textContent = 'Generating embed code...';
+
+                try {
+                    const pageId = getCurrentPageId();
+                    const embedCode = await generateEmbedCode(selectedVideoId, pageId);
+
+                    if (insertIntoEditor(embedCode)) {
+                        closeModal();
+                    } else {
+                        // Show embed code for manual copy
+                        alert('Embed code (copy and paste):\n\n' + embedCode);
+                        closeModal();
+                    }
+                } catch (error) {
+                    console.error('BSVS: Error inserting video:', error);
+                    if (statusEl) statusEl.textContent = `Error: ${error.message}`;
+                    insertBtn.disabled = false;
+                    insertBtn.textContent = 'Insert Video';
                 }
             }
         });
@@ -420,15 +498,21 @@
 
             listEl.innerHTML = data.videos
                 .filter(v => v.status === 'ready')
-                .map(v => `
+                .map(v => {
+                    const visibilityBadge = getVisibilityBadge(v.visibility || 'public');
+                    return `
                     <div class="bsvs-video-item" data-id="${v.id}">
                         <img class="bsvs-video-thumb" src="${BSVS_URL}/stream/${v.id}/thumbnail.jpg" alt="">
                         <div class="bsvs-video-info">
                             <div class="bsvs-video-title">${escapeHtml(v.title)}</div>
-                            <div class="bsvs-video-meta">${v.duration_seconds ? formatDuration(v.duration_seconds) : 'Unknown duration'}</div>
+                            <div class="bsvs-video-meta">
+                                ${v.duration_seconds ? formatDuration(v.duration_seconds) : 'Unknown duration'}
+                                ${visibilityBadge}
+                            </div>
                         </div>
                     </div>
-                `).join('');
+                    `;
+                }).join('');
 
             listEl.querySelectorAll('.bsvs-video-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -454,6 +538,16 @@
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function getVisibilityBadge(visibility) {
+        const badges = {
+            'public': '<span style="background:#4caf50;color:white;padding:2px 6px;border-radius:3px;font-size:0.75rem;margin-left:8px;">Public</span>',
+            'unlisted': '<span style="background:#ff9800;color:white;padding:2px 6px;border-radius:3px;font-size:0.75rem;margin-left:8px;">Unlisted</span>',
+            'page_protected': '<span style="background:#2196f3;color:white;padding:2px 6px;border-radius:3px;font-size:0.75rem;margin-left:8px;">Protected</span>',
+            'private': '<span style="background:#f44336;color:white;padding:2px 6px;border-radius:3px;font-size:0.75rem;margin-left:8px;">Private</span>',
+        };
+        return badges[visibility] || '';
     }
 
     // Add button to BookStack editor toolbar
