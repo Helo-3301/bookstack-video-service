@@ -60,6 +60,9 @@ class Video(Base):
     jobs: Mapped[list["TranscodeJob"]] = relationship(
         back_populates="video", cascade="all, delete-orphan"
     )
+    subtitles: Mapped[list["Subtitle"]] = relationship(
+        back_populates="video", cascade="all, delete-orphan"
+    )
 
 
 class VideoVariant(Base):
@@ -96,3 +99,21 @@ class TranscodeJob(Base):
 
     # Relationships
     video: Mapped["Video"] = relationship(back_populates="jobs")
+
+
+class Subtitle(Base):
+    """Subtitle/caption track for a video."""
+
+    __tablename__ = "subtitles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id"))
+    language: Mapped[str] = mapped_column(String(10))  # e.g., "en", "es", "fr"
+    label: Mapped[str] = mapped_column(String(100))  # e.g., "English", "Spanish"
+    file_path: Mapped[str] = mapped_column(String(500))
+    is_default: Mapped[bool] = mapped_column(default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    video: Mapped["Video"] = relationship(back_populates="subtitles")

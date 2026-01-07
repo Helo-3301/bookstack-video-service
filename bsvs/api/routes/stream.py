@@ -210,3 +210,32 @@ async def get_thumbnail(
             "Access-Control-Allow-Origin": "*",
         },
     )
+
+
+@router.get("/{video_id}/subtitles/{subtitle_file}")
+async def get_subtitle(
+    video_id: str,
+    subtitle_file: str,
+    token: str | None = Query(None, description="Stream access token"),
+):
+    """Get a subtitle file (VTT format)."""
+    validate_token(video_id, token)
+    settings = get_settings()
+
+    # Validate subtitle filename
+    if not subtitle_file.endswith(".vtt"):
+        raise HTTPException(status_code=400, detail="Invalid subtitle file format")
+
+    subtitle_path = settings.storage_path / video_id / "subtitles" / subtitle_file
+
+    if not subtitle_path.exists():
+        raise HTTPException(status_code=404, detail="Subtitle not found")
+
+    return FileResponse(
+        subtitle_path,
+        media_type="text/vtt",
+        headers={
+            "Cache-Control": "max-age=3600",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )

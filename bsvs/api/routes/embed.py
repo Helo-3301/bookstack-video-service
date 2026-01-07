@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bsvs.config import get_settings
-from bsvs.db import get_db, Video, VideoStatus
+from bsvs.db import get_db, Video, VideoStatus, Subtitle
 from bsvs.auth import generate_stream_token
 from bsvs.bookstack import get_bookstack_client
 
@@ -73,11 +73,11 @@ async def embed_player(
             detail="Access denied - you don't have permission to view this video"
         )
 
-    # Get video from database with eager-loaded variants
+    # Get video from database with eager-loaded variants and subtitles
     result = await db.execute(
         select(Video)
         .where(Video.id == video_id)
-        .options(selectinload(Video.variants))
+        .options(selectinload(Video.variants), selectinload(Video.subtitles))
     )
     video = result.scalar_one_or_none()
 
@@ -108,6 +108,17 @@ async def embed_player(
     stream_url = f"/stream/{video_id}/master.m3u8?token={stream_token}"
     poster_url = f"/stream/{video_id}/thumbnail.jpg?token={stream_token}"
 
+    # Build subtitle list with signed URLs
+    subtitles = [
+        {
+            "url": f"/stream/{video_id}/subtitles/{sub.id}.vtt?token={stream_token}",
+            "lang": sub.language,
+            "label": sub.label,
+            "default": sub.is_default,
+        }
+        for sub in video.subtitles
+    ]
+
     return templates.TemplateResponse(
         "player.html",
         {
@@ -121,5 +132,6 @@ async def embed_player(
                 {"quality": v.quality, "height": v.height}
                 for v in variants
             ],
+            "subtitles": subtitles,
         },
     )

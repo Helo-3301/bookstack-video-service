@@ -95,8 +95,18 @@
             color: #333;
         }
 
+        .btn-success {
+            background: #2e7d32;
+            color: white;
+        }
+
         .btn:hover {
             opacity: 0.9;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .video-grid {
@@ -111,6 +121,7 @@
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
             transition: box-shadow 0.2s;
+            cursor: pointer;
         }
 
         .video-card:hover {
@@ -166,39 +177,10 @@
             text-transform: uppercase;
         }
 
-        .status-ready {
-            background: #e8f5e9;
-            color: #2e7d32;
-        }
-
-        .status-processing {
-            background: #fff3e0;
-            color: #ef6c00;
-        }
-
-        .status-pending {
-            background: #e3f2fd;
-            color: #1565c0;
-        }
-
-        .status-failed {
-            background: #ffebee;
-            color: #c62828;
-        }
-
-        .video-actions {
-            display: flex;
-            gap: 8px;
-            padding: 12px 16px;
-            border-top: 1px solid #eee;
-        }
-
-        .video-actions .btn {
-            flex: 1;
-            justify-content: center;
-            padding: 8px;
-            font-size: 0.85rem;
-        }
+        .status-ready { background: #e8f5e9; color: #2e7d32; }
+        .status-processing { background: #fff3e0; color: #ef6c00; }
+        .status-pending { background: #e3f2fd; color: #1565c0; }
+        .status-failed { background: #ffebee; color: #c62828; }
 
         .modal-overlay {
             position: fixed;
@@ -220,24 +202,155 @@
         .modal {
             background: white;
             border-radius: 12px;
-            padding: 24px;
-            max-width: 500px;
-            width: 90%;
+            max-width: 700px;
+            width: 95%;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
-        .modal h2 {
-            margin-bottom: 16px;
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .modal p {
+        .modal-header h2 {
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
             color: #666;
-            margin-bottom: 24px;
         }
 
-        .modal-actions {
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #eee;
             display: flex;
             justify-content: flex-end;
             gap: 12px;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .embed-code-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            word-break: break-all;
+            position: relative;
+        }
+
+        .embed-code-box .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+        }
+
+        .help-text {
+            background: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+        }
+
+        .subtitle-list {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .subtitle-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .subtitle-item:last-child {
+            border-bottom: none;
+        }
+
+        .subtitle-info {
+            flex: 1;
+        }
+
+        .subtitle-label {
+            font-weight: 500;
+        }
+
+        .subtitle-lang {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .subtitle-default {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+
+        .upload-zone {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .upload-zone:hover {
+            border-color: #1976d2;
+        }
+
+        .upload-zone.dragover {
+            border-color: #1976d2;
+            background: #e3f2fd;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
         }
 
         .empty-state {
@@ -264,6 +377,19 @@
             text-align: center;
             padding: 40px;
             color: #666;
+        }
+
+        .video-preview {
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .video-preview iframe {
+            width: 100%;
+            height: 300px;
+            border: none;
         }
     </style>
 </head>
@@ -298,11 +424,91 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="delete-modal">
+    <!-- Video Details Modal -->
+    <div class="modal-overlay" id="video-modal">
         <div class="modal">
-            <h2>Delete Video?</h2>
-            <p>Are you sure you want to delete "<span id="delete-video-title"></span>"? This action cannot be undone.</p>
-            <div class="modal-actions">
+            <div class="modal-header">
+                <h2 id="modal-title">Video Details</h2>
+                <button class="modal-close" onclick="closeVideoModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="video-preview" id="video-preview"></div>
+
+                <div class="section">
+                    <div class="section-title">Add to BookStack Page</div>
+                    <div class="help-text">
+                        <strong>Option 1:</strong> In BookStack, edit your page and click the 🎬 button in the toolbar to insert videos directly.<br><br>
+                        <strong>Option 2:</strong> Copy the embed code below and paste it into an HTML block in your BookStack page.
+                    </div>
+                    <div class="embed-code-box" id="embed-code">
+                        <button class="btn btn-secondary copy-btn" onclick="copyEmbed()">Copy</button>
+                        <code id="embed-code-text"></code>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">
+                        Subtitles / Captions
+                        <button class="btn btn-secondary" onclick="showSubtitleUpload()">+ Add Subtitle</button>
+                    </div>
+                    <div id="subtitle-list">
+                        <p style="color: #666; font-size: 0.9rem;">No subtitles added yet.</p>
+                    </div>
+                </div>
+
+                <div class="section" id="subtitle-upload-section" style="display: none;">
+                    <div class="section-title">Upload Subtitle</div>
+                    <div class="form-group">
+                        <label>Language</label>
+                        <select id="subtitle-lang">
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Label (shown to viewers)</label>
+                        <input type="text" id="subtitle-label" placeholder="e.g., English, English (Auto-generated)">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="subtitle-default"> Set as default
+                        </label>
+                    </div>
+                    <div class="upload-zone" id="subtitle-dropzone">
+                        <p>Drop .vtt file here or click to browse</p>
+                        <input type="file" id="subtitle-file" accept=".vtt" style="display: none;">
+                    </div>
+                    <div style="margin-top: 12px; display: flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="uploadSubtitle()">Upload</button>
+                        <button class="btn btn-secondary" onclick="hideSubtitleUpload()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="deleteCurrentVideo()">Delete Video</button>
+                <button class="btn btn-secondary" onclick="closeVideoModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="delete-modal">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Delete Video?</h2>
+                <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete "<span id="delete-video-title"></span>"? This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
                 <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
             </div>
@@ -311,6 +517,7 @@
 
     <script>
         let allVideos = [];
+        let currentVideoId = null;
         let deleteVideoId = null;
 
         async function loadVideos() {
@@ -359,7 +566,7 @@
             const html = `
                 <div class="video-grid">
                     ${videos.map(video => `
-                        <div class="video-card">
+                        <div class="video-card" onclick="openVideoModal('${video.id}')">
                             <div class="video-thumb">
                                 ${video.status === 'ready'
                                     ? `<img src="/stream/${video.id}/thumbnail.jpg" alt="" onerror="this.parentElement.innerHTML='🎬'">`
@@ -374,14 +581,6 @@
                                 </div>
                                 <span class="video-status status-${video.status}">${video.status}</span>
                             </div>
-                            <div class="video-actions">
-                                ${video.status === 'ready'
-                                    ? `<a href="${video.embed_url}" target="_blank" class="btn btn-secondary">View</a>`
-                                    : `<button class="btn btn-secondary" disabled>Processing...</button>`
-                                }
-                                <button class="btn btn-secondary" onclick="copyEmbed('${video.id}')">Copy Embed</button>
-                                <button class="btn btn-danger" onclick="showDeleteModal('${video.id}', '${escapeHtml(video.title)}')">Delete</button>
-                            </div>
                         </div>
                     `).join('')}
                 </div>
@@ -389,28 +588,167 @@
             document.getElementById('video-container').innerHTML = html;
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        async function openVideoModal(videoId) {
+            currentVideoId = videoId;
+            const video = allVideos.find(v => v.id === videoId);
+            if (!video) return;
 
-        function formatDate(isoString) {
-            const date = new Date(isoString);
-            return date.toLocaleDateString();
-        }
+            document.getElementById('modal-title').textContent = video.title;
 
-        function formatDuration(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
-        }
+            // Show preview if ready
+            if (video.status === 'ready') {
+                document.getElementById('video-preview').innerHTML = `
+                    <iframe src="/embed/${videoId}" allowfullscreen></iframe>
+                `;
+            } else {
+                document.getElementById('video-preview').innerHTML = `
+                    <div style="height: 300px; display: flex; align-items: center; justify-content: center; color: white;">
+                        Video is ${video.status}...
+                    </div>
+                `;
+            }
 
-        function copyEmbed(videoId) {
+            // Set embed code
             const embedCode = `<iframe src="${window.location.origin}/embed/${videoId}" width="100%" height="400" frameborder="0" allowfullscreen></iframe>`;
+            document.getElementById('embed-code-text').textContent = embedCode;
+
+            // Load subtitles
+            await loadSubtitles(videoId);
+
+            document.getElementById('video-modal').classList.add('active');
+        }
+
+        function closeVideoModal() {
+            currentVideoId = null;
+            document.getElementById('video-modal').classList.remove('active');
+            document.getElementById('video-preview').innerHTML = '';
+            hideSubtitleUpload();
+        }
+
+        async function loadSubtitles(videoId) {
+            try {
+                const response = await fetch(`/api/videos/${videoId}/subtitles`);
+                const subtitles = await response.json();
+
+                if (subtitles.length === 0) {
+                    document.getElementById('subtitle-list').innerHTML = `
+                        <p style="color: #666; font-size: 0.9rem;">No subtitles added yet.</p>
+                    `;
+                } else {
+                    document.getElementById('subtitle-list').innerHTML = `
+                        <div class="subtitle-list">
+                            ${subtitles.map(sub => `
+                                <div class="subtitle-item">
+                                    <div class="subtitle-info">
+                                        <span class="subtitle-label">${escapeHtml(sub.label)}</span>
+                                        ${sub.is_default ? '<span class="subtitle-default">Default</span>' : ''}
+                                        <div class="subtitle-lang">${sub.language}</div>
+                                    </div>
+                                    <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSubtitle('${sub.id}')">Remove</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load subtitles:', error);
+            }
+        }
+
+        function showSubtitleUpload() {
+            document.getElementById('subtitle-upload-section').style.display = 'block';
+        }
+
+        function hideSubtitleUpload() {
+            document.getElementById('subtitle-upload-section').style.display = 'none';
+            document.getElementById('subtitle-file').value = '';
+        }
+
+        // Subtitle upload dropzone
+        const dropzone = document.getElementById('subtitle-dropzone');
+        const fileInput = document.getElementById('subtitle-file');
+
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                dropzone.querySelector('p').textContent = e.dataTransfer.files[0].name;
+            }
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                dropzone.querySelector('p').textContent = fileInput.files[0].name;
+            }
+        });
+
+        async function uploadSubtitle() {
+            if (!currentVideoId || !fileInput.files.length) {
+                alert('Please select a .vtt file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('language', document.getElementById('subtitle-lang').value);
+            formData.append('label', document.getElementById('subtitle-label').value || document.getElementById('subtitle-lang').selectedOptions[0].text);
+            formData.append('is_default', document.getElementById('subtitle-default').checked);
+
+            try {
+                const response = await fetch(`/api/videos/${currentVideoId}/subtitles`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    hideSubtitleUpload();
+                    await loadSubtitles(currentVideoId);
+                } else {
+                    const error = await response.json();
+                    alert('Failed to upload subtitle: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function deleteSubtitle(subtitleId) {
+            if (!confirm('Remove this subtitle track?')) return;
+
+            try {
+                const response = await fetch(`/api/videos/${currentVideoId}/subtitles/${subtitleId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadSubtitles(currentVideoId);
+                } else {
+                    alert('Failed to delete subtitle');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function copyEmbed() {
+            const embedCode = document.getElementById('embed-code-text').textContent;
             navigator.clipboard.writeText(embedCode).then(() => {
-                alert('Embed code copied to clipboard!');
+                const btn = document.querySelector('.copy-btn');
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = 'Copy', 2000);
             });
+        }
+
+        function deleteCurrentVideo() {
+            if (!currentVideoId) return;
+            const video = allVideos.find(v => v.id === currentVideoId);
+            showDeleteModal(currentVideoId, video?.title || 'this video');
         }
 
         function showDeleteModal(videoId, title) {
@@ -434,6 +772,7 @@
 
                 if (response.ok) {
                     closeDeleteModal();
+                    closeVideoModal();
                     loadVideos();
                 } else {
                     alert('Failed to delete video');
@@ -441,6 +780,23 @@
             } catch (error) {
                 alert('Error: ' + error.message);
             }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleDateString();
+        }
+
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
         // Auto-refresh every 30 seconds for processing videos

@@ -30,13 +30,48 @@
             justify-content: center;
         }
 
-        .video-js {
+        #bsvs-player {
             width: 100%;
             height: 100%;
         }
 
+        /* Ensure controls are visible */
+        .video-js .vjs-control-bar {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            background: rgba(43, 51, 63, 0.9);
+        }
+
+        .video-js .vjs-progress-control {
+            flex: auto;
+        }
+
+        .video-js .vjs-play-progress {
+            background: #1976d2;
+        }
+
+        .video-js .vjs-volume-panel {
+            display: flex !important;
+        }
+
+        .video-js .vjs-big-play-button {
+            background: rgba(25, 118, 210, 0.9);
+            border: none;
+            border-radius: 50%;
+        }
+
+        .video-js:hover .vjs-big-play-button {
+            background: rgba(25, 118, 210, 1);
+        }
+
         .vjs-poster {
             background-size: cover;
+        }
+
+        /* Quality selector styling */
+        .vjs-quality-selector {
+            cursor: pointer;
         }
     </style>
 </head>
@@ -44,13 +79,17 @@
     <div class="video-container">
         <video
             id="bsvs-player"
-            class="video-js vjs-big-play-centered vjs-fluid"
+            class="video-js vjs-big-play-centered"
             controls
             preload="auto"
             poster="{{ poster_url }}"
-            data-setup='{"fluid": true}'
         >
             <source src="{{ stream_url }}" type="application/x-mpegURL">
+            {% if subtitles %}
+            {% for sub in subtitles %}
+            <track kind="subtitles" src="{{ sub.url }}" srclang="{{ sub.lang }}" label="{{ sub.label }}" {% if sub.default %}default{% endif %}>
+            {% endfor %}
+            {% endif %}
             <p class="vjs-no-js">
                 To view this video please enable JavaScript, and consider upgrading to a
                 web browser that <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
@@ -67,8 +106,27 @@
                 controls: true,
                 autoplay: false,
                 preload: 'auto',
-                fluid: true,
-                playbackRates: [0.5, 1, 1.25, 1.5, 2],
+                responsive: true,
+                fill: true,
+                playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+                controlBar: {
+                    children: [
+                        'playToggle',
+                        'volumePanel',
+                        'currentTimeDisplay',
+                        'timeDivider',
+                        'durationDisplay',
+                        'progressControl',
+                        'playbackRateMenuButton',
+                        'chaptersButton',
+                        'subtitlesButton',
+                        'captionsButton',
+                        'fullscreenToggle'
+                    ],
+                    volumePanel: {
+                        inline: false
+                    }
+                },
                 html5: {
                     vhs: {
                         overrideNative: true
@@ -83,9 +141,47 @@
                 console.error('Video playback error:', player.error());
             });
 
-            // Log quality changes
+            // Log when ready
             player.on('loadedmetadata', function() {
                 console.log('Video loaded: {{ title }}');
+                console.log('Duration:', player.duration());
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.target.tagName === 'INPUT') return;
+
+                switch(e.key) {
+                    case ' ':
+                    case 'k':
+                        e.preventDefault();
+                        player.paused() ? player.play() : player.pause();
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        player.currentTime(Math.max(0, player.currentTime() - 5));
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        player.currentTime(Math.min(player.duration(), player.currentTime() + 5));
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        player.volume(Math.min(1, player.volume() + 0.1));
+                        break;
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        player.volume(Math.max(0, player.volume() - 0.1));
+                        break;
+                    case 'm':
+                        e.preventDefault();
+                        player.muted(!player.muted());
+                        break;
+                    case 'f':
+                        e.preventDefault();
+                        player.isFullscreen() ? player.exitFullscreen() : player.requestFullscreen();
+                        break;
+                }
             });
         });
     </script>

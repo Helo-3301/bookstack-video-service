@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bsvs.config import get_settings
-from bsvs.db import get_db, Video, VideoStatus, TranscodeJob, JobStatus
+from bsvs.db import get_db, Video, VideoStatus, TranscodeJob, JobStatus, Subtitle
 from bsvs.worker.tasks import transcode_video_task
 from bsvs.api.ratelimit import limiter, RATE_LIMIT_UPLOAD
 
@@ -242,4 +242,146 @@ async def delete_video(
 
     # Delete database record
     await db.delete(video)
+    await db.commit()
+
+
+class SubtitleResponse(BaseModel):
+    """Subtitle response model."""
+    id: str
+    video_id: str
+    language: str
+    label: str
+    is_default: bool
+
+
+@router.post("/{video_id}/subtitles", response_model=SubtitleResponse, status_code=201)
+async def upload_subtitle(
+    video_id: str,
+    file: Annotated[UploadFile, File(description="VTT subtitle file")],
+    language: Annotated[str, Form()] = "en",
+    label: Annotated[str, Form()] = "English",
+    is_default: Annotated[bool, Form()] = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Upload a subtitle file (VTT format) for a video.
+
+    Args:
+        video_id: Video ID to attach subtitle to
+        file: VTT subtitle file
+        language: Language code (e.g., "en", "es", "fr")
+        label: Human-readable label (e.g., "English", "Spanish")
+        is_default: Whether this is the default subtitle track
+    """
+    settings = get_settings()
+
+    # Check video exists
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    if not file.filename.endswith('.vtt'):
+        raise HTTPException(status_code=400, detail="Only VTT subtitle files are supported")
+
+    # Create subtitles directory
+    subtitles_dir = settings.storage_path / video_id / "subtitles"
+    subtitles_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create subtitle record
+    subtitle = Subtitle(
+        video_id=video_id,
+        language=language,
+        label=label,
+        is_default=is_default,
+        file_path="",  # Will update after save
+    )
+    db.add(subtitle)
+    await db.flush()  # Get the ID
+
+    # Save file with subtitle ID
+    file_path = subtitles_dir / f"{subtitle.id}.vtt"
+    subtitle.file_path = str(file_path)
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"Saved subtitle {subtitle.id} to {file_path}")
+    except Exception as e:
+        logger.error(f"Failed to save subtitle: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save subtitle file")
+
+    # If this is default, unset other defaults
+    if is_default:
+        await db.execute(
+            select(Subtitle)
+            .where(Subtitle.video_id == video_id, Subtitle.id != subtitle.id)
+        )
+        # Update other subtitles to not be default
+        from sqlalchemy import update
+        await db.execute(
+            update(Subtitle)
+            .where(Subtitle.video_id == video_id, Subtitle.id != subtitle.id)
+            .values(is_default=False)
+        )
+
+    await db.commit()
+
+    return SubtitleResponse(
+        id=subtitle.id,
+        video_id=subtitle.video_id,
+        language=subtitle.language,
+        label=subtitle.label,
+        is_default=subtitle.is_default,
+    )
+
+
+@router.get("/{video_id}/subtitles", response_model=list[SubtitleResponse])
+async def list_subtitles(
+    video_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all subtitles for a video."""
+    result = await db.execute(
+        select(Subtitle).where(Subtitle.video_id == video_id)
+    )
+    subtitles = result.scalars().all()
+
+    return [
+        SubtitleResponse(
+            id=sub.id,
+            video_id=sub.video_id,
+            language=sub.language,
+            label=sub.label,
+            is_default=sub.is_default,
+        )
+        for sub in subtitles
+    ]
+
+
+@router.delete("/{video_id}/subtitles/{subtitle_id}", status_code=204)
+async def delete_subtitle(
+    video_id: str,
+    subtitle_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a subtitle track."""
+    result = await db.execute(
+        select(Subtitle).where(Subtitle.id == subtitle_id, Subtitle.video_id == video_id)
+    )
+    subtitle = result.scalar_one_or_none()
+
+    if not subtitle:
+        raise HTTPException(status_code=404, detail="Subtitle not found")
+
+    # Delete file
+    file_path = Path(subtitle.file_path)
+    if file_path.exists():
+        file_path.unlink()
+
+    await db.delete(subtitle)
     await db.commit()
