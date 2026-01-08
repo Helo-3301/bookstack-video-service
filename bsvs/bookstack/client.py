@@ -207,20 +207,41 @@ class BookStackClient:
             }
 
             async with httpx.AsyncClient(verify=False) as client:
-                # First try /api/users/me
+                # First try /api/users/me to get basic user info
                 url = f"{self.base_url}/api/users/me"
                 response = await client.get(url, headers=headers, timeout=10.0)
 
                 if response.status_code == 200:
                     data = response.json()
                     logger.debug(f"Token validation /users/me response: {data}")
-                    logger.debug(f"Roles from response: {data.get('roles')}")
-                    return BookStackUser(
-                        id=data["id"],
-                        name=data["name"],
-                        email=data["email"],
-                        roles=data.get("roles"),
-                    )
+                    user_id = data["id"]
+
+                    # /api/users/me may not include full roles with names
+                    # Fetch full user details from /api/users/{id}
+                    user_url = f"{self.base_url}/api/users/{user_id}"
+                    user_response = await client.get(user_url, headers=headers, timeout=10.0)
+
+                    if user_response.status_code == 200:
+                        user_data = user_response.json()
+                        logger.debug(f"Full user data from /users/{user_id}: {user_data}")
+                        roles = user_data.get("roles", [])
+                        logger.debug(f"Roles from /users/{user_id}: {roles}")
+                        return BookStackUser(
+                            id=user_data["id"],
+                            name=user_data["name"],
+                            email=user_data["email"],
+                            roles=roles,
+                        )
+                    else:
+                        # Fall back to /users/me data if we can't get full details
+                        logger.warning(f"Could not fetch /users/{user_id}: {user_response.status_code}")
+                        logger.debug(f"Falling back to /users/me roles: {data.get('roles')}")
+                        return BookStackUser(
+                            id=data["id"],
+                            name=data["name"],
+                            email=data["email"],
+                            roles=data.get("roles"),
+                        )
                 elif response.status_code == 500:
                     # Some BookStack versions have a bug in /users/me
                     # Try fallback validation
